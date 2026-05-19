@@ -1,59 +1,48 @@
-import requests
-from bs4 import BeautifulSoup
 import re
 import urllib.parse
+from bs4 import BeautifulSoup
+from playwright.sync_api import sync_playwright
 
-def hileli_istek_at(url):
-    # Sitelerin bot korumasını aşmak için çok daha detaylı tarayıcı taklidi (Headers)
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
-        'Accept-Language': 'tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7',
-        'Cache-Control': 'no-cache',
-        'Pragma': 'no-cache',
-        'Referer': 'https://google.com',
-        'Sec-Ch-Ua': '"Not-A.Brand";v="99", "Chromium";v="124", "Google Chrome";v="124"',
-        'Sec-Ch-Ua-Mobile': '?0',
-        'Sec-Ch-Ua-Platform': '"Windows"',
-        'Sec-Fetch-Dest': 'document',
-        'Sec-Fetch-Mode': 'navigate',
-        'Sec-Fetch-Site': 'cross-site',
-        'Sec-Fetch-User': '?1',
-        'Upgrade-Insecure-Requests': '1'
-    }
+def gercek_tarayici_ile_oku(url):
+    """Sitelerin korumasını geçmek için arkada gizli bir Chrome açar."""
     try:
-        # Sunucu korumalarını aşmak için session (oturum) yapısı kullanıyoruz
-        session = requests.Session()
-        response = session.get(url, headers=headers, timeout=20)
-        return response.text if response.status_code == 200 else None
+        with sync_playwright() as p:
+            # Tarayıcıyı görünmez (headless) modda başlatıyoruz
+            browser = p.chromium.launch(headless=True)
+            context = browser.new_context(
+                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+                viewport={"width": 1280, "height": 720}
+            )
+            page = context.new_page()
+            
+            # Sayfaya git ve tamamen yüklenmesi için 8 saniye bekle
+            page.goto(url, wait_until="networkidle", timeout=30000)
+            page.wait_for_timeout(8000) 
+            
+            html_content = page.content()
+            browser.close()
+            return html_content
     except Exception as e:
-        print(f"Bağlantı hatası ({url}): {e}")
+        print(f"Tarayıcı hatası ({url}): {e}")
         return None
 
 def kaynakta_m3u8_ara(html_icerik):
     if not html_icerik:
         return None
     
-    # Çok daha geniş açılı m3u8 yakalama kalıpları (regex)
+    # Gelişmiş m3u8 yakalama kalıpları
     kalip_m3u8 = r'(https?://[^\s"\'`<>]+?\.m3u8[^\s"\'`<>]*)'
     bulunanlar = re.findall(kalip_m3u8, html_icerik)
     
     if bulunanlar:
-        # JSON verilerinden gelen ters bölüleri (\/) düzelt
-        temiz_link = bulunanlar[0].replace('\\/', '/')
+        temiz_link = bulunanlar.replace('\\/', '/')
         if "analytics" not in temiz_link and "ads" not in temiz_link:
             return temiz_link
             
-    # Alternatif korumalı/farklı format m3u8 tespiti
-    kalip_alt = r'["\'](file|source)["\']\s*:\s*["\']([^"\']+\.m3u8[^"\']*)["\']'
-    alt_bulunanlar = re.findall(kalip_alt, html_icerik)
-    if alt_bulunanlar:
-        return alt_bulunanlar[0][1].replace('\\/', '/')
-        
     return None
 
 def kanalin_m3u8_linkini_bul(kanal_url):
-    sayfa_html = hileli_istek_at(kanal_url)
+    sayfa_html = gercek_tarayici_ile_oku(kanal_url)
     if not sayfa_html:
         return None
         
@@ -62,14 +51,12 @@ def kanalin_m3u8_linkini_bul(kanal_url):
         return m3u8_link
         
     soup = BeautifulSoup(sayfa_html, 'html.parser')
-    
-    # Sayfadaki tüm iframe ve embed ögelerini derinlemesine tarıyoruz
-    for iframe in soup.find_all(['iframe', 'embed', 'source'], src=True):
+    for iframe in soup.find_all(['iframe', 'embed'], src=True):
         iframe_src = iframe['src']
         if not iframe_src.startswith('http'):
             iframe_src = urllib.parse.urljoin(kanal_url, iframe_src)
             
-        iframe_html = hileli_istek_at(iframe_src)
+        iframe_html = gercek_tarayici_ile_oku(iframe_src)
         m3u8_link = kaynakta_m3u8_ara(iframe_html)
         if m3u8_link:
             return m3u8_link
@@ -92,10 +79,9 @@ def sitelerden_veri_topla():
     }
     
     for site_adi, kurallar in siteler.items():
-        print(f"🔍 {site_adi} taranıyor...")
-        kat_html = hileli_istek_at(kurallar["kategori_url"])
+        print(f"🌐 {site_adi} sitesine gerçek tarayıcı simülasyonu ile bağlanılıyor...")
+        kat_html = gercek_tarayici_ile_oku(kurallar["kategori_url"])
         if not kat_html:
-            print(f"⚠️ {site_adi} ana sayfası korumayı geçemedi.")
             continue
             
         soup = BeautifulSoup(kat_html, 'html.parser')
@@ -113,32 +99,28 @@ def sitelerden_veri_topla():
                 if tam_kanal_url not in gecici_hafiza:
                     gecici_hafiza.add(tam_kanal_url)
                     
+                    print(f"   ↳ {title} kanalı taranıyor...")
                     m3u8_adresi = kanalin_m3u8_linkini_bul(tam_kanal_url)
                     if m3u8_adresi:
+                        print(f"      ✅ M3U8 Linki Yakalandı!")
                         M3U_LISTESI.append({
                             "isim": title,
                             "grup": site_adi,
                             "stream_url": m3u8_adresi
                         })
                         
-    # 🚨 GÜVENLİK DUVARI ÖNLEMİ: Eğer hiçbir kanal bulunamazsa GitHub hata vermesin diye sahte/test kanalı ekliyoruz.
-    if not M3U_LISTESI:
-        print("⚠️ Canlı linkler korumaya takıldı. Test amaçlı placeholder kanal ekleniyor.")
-        M3U_LISTESI.append({
-            "isim": "Sistem Kontrol (Yayın Bulunamadı)",
-            "grup": "Sistem",
-            "stream_url": "https://mux.dev"
-        })
-        
     return M3U_LISTESI
 
 def m3u_dosyasi_olustur(liste, dosya_adi="playlist.m3u"):
+    if not liste:
+        print("⚠️ Uyarı: Hiçbir aktif kanal linki ayıklanamadı.")
+        return
     with open(dosya_adi, "w", encoding="utf-8") as f:
         f.write("#EXTM3U\n")
         for kanal in liste:
             f.write(f'#EXTINF:-1 group-title="{kanal["grup"]}",{kanal["isim"]}\n')
             f.write(f'{kanal["stream_url"]}\n')
-    print(f"✅ {dosya_adi} dosyası başarıyla yazıldı.")
+    print(f"🎉 İşlem tamam! {dosya_adi} güncellendi.")
 
 if __name__ == "__main__":
     bulunan_kanallar = sitelerden_veri_topla()
