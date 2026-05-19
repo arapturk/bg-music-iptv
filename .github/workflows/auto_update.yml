@@ -4,7 +4,11 @@ on:
   schedule:
     # Her gün gece 03:00 TSİ (00:00 UTC) otomatik çalışır
     - cron: '0 0 * * *'
-  workflow_dispatch: # İstediğiniz an GitHub panelinden manuel çalıştırmak için
+  workflow_dispatch: # İstediğiniz an manuel çalıştırmak için
+
+# ⚠️ KRİTİK GÜNCELLEME: GitHub Actions'a repoya doğrudan yazma izni veriyoruz
+permissions:
+  contents: write
 
 jobs:
   update-list:
@@ -13,6 +17,8 @@ jobs:
     steps:
     - name: Depoyu Klonla
       uses: actions/checkout@v4
+      with:
+        persist-credentials: true # Token'ın aktif kalmasını sağlar
 
     - name: Python Kurulumu
       uses: actions/setup-python@v5
@@ -28,9 +34,18 @@ jobs:
       run: python scraper.py
 
     - name: Değişiklikleri GitHub'a Gönder
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # Yetkilendirme tokenı
       run: |
-        git config --local user.email "github-actions[bot]@://github.com"
+        git config --local user.email "github-actions[bot]@users.noreply.github.com"
         git config --local user.name "github-actions[bot]"
-        git add playlist.m3u
-        # Sadece değişiklik varsa commit et, yoksa hata verme
-        git diff --quiet && git diff --staged --quiet || (git commit -m "🤖 Otomatik Güncelleme: $(date +'%Y-%m-%d %H:%M:%S')" && git push)
+        
+        # Eğer playlist.m3u oluştuysa ekle
+        if [ -f playlist.m3u ]; then
+          git add playlist.m3u
+          # Değişiklik varsa commit ve push yap, yoksa temiz çık
+          git diff --quiet && git diff --staged --quiet || (git commit -m "🤖 Otomatik Güncelleme: $(date +'%Y-%m-%d %H:%M:%S')" && git push "https://${GITHUB_ACTOR}:${GITHUB_TOKEN}@://github.com{GITHUB_REPOSITORY}.git" HEAD:main)
+        else
+          echo "Hata: playlist.m3u dosyası üretilemedi."
+          exit 1
+        fi
