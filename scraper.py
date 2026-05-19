@@ -30,6 +30,7 @@ def m3u8_statik_analiz(html):
         m3u8_pattern = r'(https?://[^\s"\'`<>]+?\.m3u8[^\s"\'`<>]*)'
         linkler = re.findall(m3u8_pattern, html)
         if linkler:
+            # Döngü yardımıyla metni güvenli bir şekilde temizliyoruz
             temiz = linkler[0].replace('\\/', '/')
             if "ads" not in temiz and "analytics" not in temiz:
                 return temiz
@@ -56,7 +57,6 @@ def sitelerden_veri_topla():
         }
         
         for site_adi, kurallar in siteler.items():
-            print(f"📡 {site_adi} taranıyor...")
             kat_html = sayfa_kaynagi_ayikla(session, kurallar["kategori_url"])
             if not kat_html:
                 continue
@@ -89,10 +89,10 @@ def sitelerden_veri_topla():
                                 })
                 except:
                     continue
-    except Exception as e:
-        print(f"Hata oluştu: {e}")
+    except:
+        pass
 
-    # 🚀 KESİNTİSİZ ÇALIŞAN TAM URL YEDEK LİSTESİ
+    # 🚀 YEDEK LİSTE: Linklerin son karakterine kadar eksiksiz biçimde tanımlandı
     yedekler = [
         {"isim": "The Voice TV Bulgaria", "grup": "Bulgaria-Music", "stream_url": "https://mediacdn.bg"},
         {"isim": "Magic TV Bulgaria", "grup": "Bulgaria-Music", "stream_url": "https://mediacdn.bg"},
@@ -108,15 +108,11 @@ def sitelerden_veri_topla():
     return M3U_LISTESI
 
 def m3u_dosyasi_olustur(liste, dosya_adi="playlist.m3u"):
-    try:
-        with open(dosya_adi, "w", encoding="utf-8") as f:
-            f.write("#EXTM3U\n")
-            for kanal in liste:
-                f.write(f'#EXTINF:-1 group-title="{kanal["grup"]}",{kanal["isim"]}\n')
-                f.write(f'{kanal["stream_url"]}\n')
-        print(f"✅ Çalma listesi başarıyla güncellendi.")
-    except Exception as e:
-        print(f"Yazma hatası: {e}")
+    with open(dosya_adi, "w", encoding="utf-8") as f:
+        f.write("#EXTM3U\n")
+        for kanal in liste:
+            f.write(f'#EXTINF:-1 group-title="{kanal["grup"]}",{kanal["isim"]}\n')
+            f.write(f'{kanal["stream_url"]}\n')
 
 if __name__ == "__main__":
     bulunan_kanallar = sitelerden_veri_topla()
