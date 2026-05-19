@@ -1,3 +1,9 @@
 #EXTM3U
-#EXTINF:-1 group-title="Sistem",Sistem Kontrol (Yayın Bulunamadı)
-https://mux.dev
+#EXTINF:-1 group-title="Bulgaria-Music",The Voice TV Bulgaria
+https://mediacdn.bg
+#EXTINF:-1 group-title="Bulgaria-Music",Magic TV Bulgaria
+https://mediacdn.bg
+#EXTINF:-1 group-title="Bulgaria-Music",City TV Bulgaria
+https://mediacdn.bg
+#EXTINF:-1 group-title="Bulgaria-Music",DSTV Music
+http://46.10.191
