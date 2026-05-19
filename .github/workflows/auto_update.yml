@@ -2,12 +2,11 @@ name: Dynamic IPTV Playlist Auto Update
 
 on:
   schedule:
-    # Her gün gece 03:00 TSİ (00:00 UTC) otomatik çalışır
     - cron: '0 0 * * *'
-  workflow_dispatch: # Manuel çalıştırmak için
+  workflow_dispatch:
 
 permissions:
-  contents: write # Repoya yazma izni
+  contents: write
 
 jobs:
   update-list:
@@ -27,10 +26,13 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r requirements.txt
 
+    # 🚀 KRİTİK ADIM: GitHub sunucusuna gizli Chrome tarayıcısını kuruyoruz
+    - name: Playwright Tarayıcılarını Kur
+      run: npx playwright install chromium --with-deps
+
     - name: Scripti Çalıştır ve Güncelle
       run: python scraper.py
 
-    # 🚀 EN GARANTİ ÇÖZÜM: Dosyayı otomatik commit ve push eden hazır eylem
     - name: Değişiklikleri Taahhüt Et ve Gönder
       uses: stefanzweifel/git-auto-commit-action@v5
       with:
